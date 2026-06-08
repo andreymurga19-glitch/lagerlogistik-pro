@@ -1529,13 +1529,22 @@ async function renderChat(){
     </div>
     <button class="btn btn-ghost btn-full btn-sm" onclick="startMode('chat')">🔄 Нова розмова</button>`;
 
-  const openingPrompt = `Du bist IHK-Prüfer für "Fachkraft für Lagerlogistik".
+  const openingPrompt = `Du bist ein STRENGER IHK-Prüfer für "Fachkraft für Lagerlogistik".
 Thema: "${label}".
+Relevante Begriffe: ${topicWords}
 
-Beginne SOFORT mit der Prüfung. Kein langer Smalltalk.
-Sage nur: "Guten Tag! Thema heute: ${label}. [Deine erste konkrete Prüfungsfrage zum Thema]?"
+DEINE AUFGABE: Prüfe den Studenten VOLLSTÄNDIG durch das gesamte Thema.
+Gehe ALLE wichtigen Aspekte durch: Definitionen, Prozesse, Vorschriften, Beispiele, Ausnahmen.
+Sei STRENG: Halbe Antworten sind falsch. Verlange vollständige Fachbegriffe.
 
-Themenrelevante Begriffe: ${topicWords}`;
+REGELN:
+- Stelle 1 Frage nach der anderen — KEINE Pause, KEIN Lob ohne Grund
+- Bei falscher Antwort: sofort korrigieren + dieselbe Frage nochmal
+- Bei richtiger Antwort: kurz bestätigen + sofort nächste Frage
+- Nach jeder 5. Frage: Zwischenstand auf Ukrainisch (✓ X richtig, ✗ Y falsch)
+- Ziel: mindestens 15-20 Fragen zum Thema stellen
+
+Beginne SOFORT: "Prüfung beginnt. Thema: ${label}. Frage 1: [erste Frage]?"`;
 
   const loadDiv = addChatMsg('ai','<div style="display:flex;align-items:center;gap:8px"><div class="spinner"></div><span style="color:var(--mt2);font-size:.82rem">Екзаменатор готується...</span></div>');
   try {
@@ -1568,26 +1577,33 @@ async function sendChat(){
   chatHistory.push({role:'user',text});
 
   const label=currentSection.data.label;
+  const topicWords=(currentSection.data.questions||[]).slice(0,5).map(q=>(q.de||'').split('\n')[0]).join(' | ');
   const history=chatHistory
     .filter(h=>h.role!=='system')
     .slice(-8)
     .map(h=>(h.role==='ai'?'Prüfer: ':'Student: ')+h.text)
     .join('\n');
 
-  const prompt=`Du bist IHK-Prüfer für "Fachkraft für Lagerlogistik", Thema: "${label}".
+  const qCount = chatHistory.filter(h=>h.role==='ai').length;
+  const prompt=`Du bist ein STRENGER IHK-Prüfer für "Fachkraft für Lagerlogistik", Thema: "${label}".
+Aktuelle Fragennummer: ${qCount}
+Relevante Begriffe: ${topicWords||''}
 
 Bisheriges Gespräch:
 ${history}
 Prüfer:
 
-REGELN (strikt):
-1. Bewerte die letzte Antwort des Studenten KONKRET:
-   - Richtig → "Richtig! [was genau richtig war]. Nächste Frage: ..."  
-   - Teilweise → "Fast! Du hast [X] richtig, aber [Y] vergessen. Nächste Frage: ..."
-   - Falsch → "Nicht ganz. Richtig wäre: [korrekte Antwort kurz]. Nächste Frage: ..."
-2. Stelle IMMER genau 1 neue Frage danach
-3. Antworte auf Deutsch
-4. Nach jeder 5. Frage: schreibe "📊 Zusammenfassung:" auf Ukrainisch`;
+STRENGE REGELN:
+1. Bewerte die letzte Antwort KONKRET und KRITISCH:
+   - Richtig + vollständig → "✓ Richtig! [was genau]. Weiter: Frage ${qCount+1}: ..."
+   - Teilweise → "⚠ Fast! Du hast [X] genannt, aber [Y] und [Z] fehlen noch. Ich wiederhole: ..."  
+   - Falsch/unvollständig → "✗ Falsch. Die richtige Antwort: [vollständige korrekte Antwort]. Merke dir das! Nächste Frage ${qCount+1}: ..."
+2. Stelle SOFORT 1 neue Frage — kein Smalltalk
+3. Decke ALLE Aspekte des Themas ab: Definitionen, Prozesse, Gesetze, Zahlen, Ausnahmen, Praxisbeispiele
+4. Sei MAXIMAL STRENG: Fachbegriffe müssen korrekt sein
+5. Nach jeder 5. Frage schreibe: "📊 Zwischenstand: ✓ [X] richtig · ✗ [Y] falsch · Weiter!"
+6. Bei Frage 15+: schreibe Abschlussbewertung auf Ukrainisch mit konkreten Schwachstellen
+7. Antworte NUR auf Deutsch`;
 
   const loadDiv=addChatMsg('ai','<div class="spinner"></div>');
   try {
