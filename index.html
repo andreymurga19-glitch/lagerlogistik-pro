@@ -1515,9 +1515,8 @@ Themenrelevante Begriffe: ${topicWords}`;
 
   const loadDiv = addChatMsg('ai','<div style="display:flex;align-items:center;gap:8px"><div class="spinner"></div><span style="color:var(--mt2);font-size:.82rem">Екзаменатор готується...</span></div>');
   try {
-    const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:openingPrompt})});
-    const data = await resp.json();
-    if(loadDiv) loadDiv.innerHTML = data.text||'Guten Tag!';
+    const _aiResp = await callAI(openingPrompt);
+    const _aiData = {text: _aiResp}
     chatHistory.push({role:'system', text:openingPrompt});
     chatHistory.push({role:'ai', text:data.text});
   } catch(e){
