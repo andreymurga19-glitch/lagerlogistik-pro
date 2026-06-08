@@ -1253,7 +1253,23 @@ function renderLearn(){
     <div class="q-text" id="qLearnText">${makeClickable(qText)}</div>
     ${answer ? `
     <button class="btn btn-full btn-ghost" id="showAnswerBtn" onclick="showLearnAnswer('${q.id}')">👁 Показати відповідь</button>
-    <div class="q-answer-box" id="answerBox">${makeClickable(answer)}</div>
+    <div class="q-answer-box" id="answerBox">
+      ${(()=>{
+        // Якщо є варіанти відповідей (opts або рядки a)/b)/c)/d)) - показуємо всі
+        const qOpts = q.opts || [];
+        const parsedOpts = qOpts.length ? qOpts : (q.de||'').split(/\n|\\n/).filter(l=>/^[a-d]\)/.test(l.trim()));
+        const correctL = q.correct || 'a';
+        if(parsedOpts.length > 1){
+          return parsedOpts.map((opt,i)=>{
+            const letter = String.fromCharCode(97+i);
+            const isCorrect = letter === correctL;
+            const style = isCorrect ? 'border:2px solid var(--grn);background:rgba(34,197,94,.12);border-radius:6px;padding:6px 10px;margin:4px 0;display:block;' : 'border:1px solid var(--br);border-radius:6px;padding:6px 10px;margin:4px 0;display:block;';
+            return '<span style="'+style+'">'+makeClickable(opt)+(isCorrect?' ✓':'')+'</span>';
+          }).join('');
+        }
+        return makeClickable(answer);
+      })()}
+    </div>
     <div id="rateButtons" style="display:none;gap:9px;margin-top:10px">
       <button class="btn btn-full" style="background:var(--red);color:#fff;flex:1" onclick="rateQ('${key}','${q.id}',false);lrNext()">✗ Не знав</button>
       <button class="btn btn-full btn-grn" style="flex:1" onclick="rateQ('${key}','${q.id}',true);lrNext()">✓ Знав</button>
@@ -1646,7 +1662,7 @@ const wordTransCache = {};
 
 function makeClickable(text){
   if(!text) return '';
-  return String(text).replace(/\\n/g,'<br>').replace(/([A-ZÜÖÄ][a-züöäßA-ZÜÖÄ]{3,})/g,
+  return String(text).replace(/\\n/g,'<br>').replace(/([A-Za-züöäßÜÖÄ]{3,})/g,
     function(w){ return '<span class="word-clickable" onclick="wordClick(event,\''+w+'\')">'+w+'</span>'; });
 }
 
@@ -1657,6 +1673,8 @@ function makeWordsClickable(){
 }
 
 async function wordClick(e, word){
+  // Підтримка фраз — якщо передано фразу з виділення
+  if(e && e._phraseOverride) word = e._phraseOverride;
   e.stopPropagation();
   tooltipWord = word;
   const tt = document.getElementById('wordTooltip');
@@ -1729,6 +1747,19 @@ function addToVocab(){
   if(wtUA){wtUA.style.color='var(--grn)';}
   toast('✅ '+tooltipWord+' → '+tooltipTranslation,'var(--grn)');
 }
+
+// Виділення фрази мишею або тачем
+document.addEventListener('mouseup', function(e){
+  const sel = window.getSelection();
+  if(!sel || sel.isCollapsed) return;
+  const phrase = sel.toString().trim().replace(/\s+/g,' ');
+  if(phrase.length < 3 || phrase.length > 80) return;
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  const fakeE = {stopPropagation:()=>{}, target:e.target, getBoundingClientRect:()=>({left:rect.left, bottom:rect.bottom}), _phraseOverride:phrase};
+  sel.removeAllRanges();
+  wordClick(fakeE, phrase);
+});
 
 document.addEventListener('click',(e)=>{
   if(!e.target.closest('#wordTooltip')&&!e.target.classList.contains('word-clickable')) hideTooltip();
