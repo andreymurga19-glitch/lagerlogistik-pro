@@ -1229,13 +1229,17 @@ function renderModeContent(){
 // ══════════════════════════════════════════════════════════════
 // LEARN MODE
 // ══════════════════════════════════════════════════════════════
+
+function lrPrev(){ if(currentQ>0){currentQ--;renderLearn();} }
+function lrNext(){ if(currentQ<sessionQuestions.length-1){currentQ++;renderLearn();} }
+
 function renderLearn(){
   const qs = sessionQuestions;
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <div style="font-size:.78rem;color:var(--mt2)">Питання ${currentQ+1}/${qs.length}</div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-sm btn-ghost" onclick="currentQ=Math.max(0,currentQ-1);renderLearn()">←</button>
-      <button class="btn btn-sm btn-ghost" onclick="currentQ=Math.min(qs.length-1,currentQ+1);renderLearn()">→</button>
+      <button class="btn btn-sm btn-ghost" onclick="lrPrev()">←</button>
+      <button class="btn btn-sm btn-ghost" onclick="lrNext()">→</button>
     </div>
   </div>`;
 
@@ -1251,8 +1255,8 @@ function renderLearn(){
     <button class="btn btn-full btn-ghost" id="showAnswerBtn" onclick="showLearnAnswer('${q.id}')">👁 Показати відповідь</button>
     <div class="q-answer-box" id="answerBox">${makeClickable(answer)}</div>
     <div id="rateButtons" style="display:none;gap:9px;margin-top:10px">
-      <button class="btn btn-full" style="background:var(--red);color:#fff;flex:1" onclick="rateQ('${key}','${q.id}',false);currentQ=Math.min(qs.length-1,currentQ+1);renderLearn()">✗ Не знав</button>
-      <button class="btn btn-full btn-grn" style="flex:1" onclick="rateQ('${key}','${q.id}',true);currentQ=Math.min(qs.length-1,currentQ+1);renderLearn()">✓ Знав</button>
+      <button class="btn btn-full" style="background:var(--red);color:#fff;flex:1" onclick="rateQ('${key}','${q.id}',false);lrNext()">✗ Не знав</button>
+      <button class="btn btn-full btn-grn" style="flex:1" onclick="rateQ('${key}','${q.id}',true);lrNext()">✓ Знав</button>
     </div>
     ` : ''}
   </div>`;
@@ -1667,6 +1671,36 @@ document.addEventListener('click',(e)=>{
 // ══════════════════════════════════════════════════════════════
 // VOCAB VIEW
 // ══════════════════════════════════════════════════════════════
+
+async function translateAndUpdate(word) {
+  // Translate and update vocab entry + DOM
+  if(wordTransCache[word]&&wordTransCache[word]!=='?') {
+    updateVocabEntry(word, wordTransCache[word]);
+    return;
+  }
+  try {
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:'Переклади термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад, максимум 5 слів.'}]}]})
+    });
+    const data = await resp.json();
+    const ua = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'';
+    if(ua) {
+      wordTransCache[word] = ua;
+      updateVocabEntry(word, ua);
+      // Update in vocab array
+      const v = vocab.find(x=>x.de===word);
+      if(v) { v.ua = ua; saveVocab(); }
+    }
+  } catch(e) {}
+}
+
+function updateVocabEntry(word, ua) {
+  const id = 'vtrans-' + word.replace(/[^a-zA-Z]/g,'_');
+  const el = document.getElementById(id);
+  if(el) { el.textContent = ua; el.style.color = 'var(--tx)'; }
+}
+
 function renderVocab(){
   const q=document.getElementById('vocabSearch')?.value.toLowerCase()||'';
   const filtered=vocab.filter(v=>!q||v.de.toLowerCase().includes(q)||v.ua.toLowerCase().includes(q));
@@ -1681,12 +1715,18 @@ function renderVocab(){
   let html='';
   Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(date=>{
     html+=`<div style="font-size:.72rem;color:var(--mt2);letter-spacing:1px;text-transform:uppercase;margin:14px 0 6px">${date} · ${groups[date].length} слів</div>`;
-    groups[date].forEach(v=>{
-      html+=`<div style="background:var(--sf);border:1px solid var(--br);border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:8px;margin-bottom:5px">
+    groups[date].forEach((v,vi)=>{
+      const uaText = v.ua&&v.ua!=='?'&&v.ua!=='' ? v.ua : '⏳';
+      const safeDE = v.de.replace(/'/g,"\'");
+      html+=`<div style="background:var(--sf);border:1px solid var(--br);border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:8px;margin-bottom:5px" id="vrow-${v.de.replace(/[^a-zA-Z]/g,'_')}">
         <div style="font-family:var(--fm);font-size:.84rem;color:var(--gold);flex:1">${v.de}</div>
-        <div style="font-size:.8rem;color:var(--mt2);flex:1">${v.ua}</div>
-        <button onclick="vocab=vocab.filter(x=>x.de!=='${v.de}');saveVocab();renderVocab()" style="background:none;border:none;color:var(--mt);cursor:pointer;font-size:.8rem">✕</button>
+        <div style="font-size:.8rem;color:var(--mt2);flex:1" id="vtrans-${v.de.replace(/[^a-zA-Z]/g,'_')}">${uaText}</div>
+        <button onclick="vocab=vocab.filter(x=>x.de!=='${safeDE}');saveVocab();renderVocab()" style="background:none;border:none;color:var(--mt);cursor:pointer;font-size:.8rem">✕</button>
       </div>`;
+      // Auto-translate missing
+      if(!v.ua||v.ua==='?'||v.ua===''){
+        translateAndUpdate(v.de);
+      }
     });
   });
   container.innerHTML=html;
