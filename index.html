@@ -1213,7 +1213,9 @@ function goBackFromSection(){
 function startMode(mode){
   currentMode = mode;
   currentQ = 0;
-  sessionQuestions = [...(currentSection.data.questions||[])].sort(()=>Math.random()-.5);
+  // Learn mode: keep original order; Test/Voice: shuffle
+  const qs = currentSection.data.questions||[];
+  sessionQuestions = mode==='learn' ? [...qs] : [...qs].sort(()=>Math.random()-.5);
   renderModeContent();
 }
 
@@ -1248,7 +1250,7 @@ function renderLearn(){
     ${answer ? `
     <button class="btn btn-full btn-ghost" id="showAnswerBtn" onclick="showLearnAnswer('${q.id}')">👁 Показати відповідь</button>
     <div class="q-answer-box" id="answerBox">${makeClickable(answer)}</div>
-    <div id="rateButtons" style="display:none;display:flex;gap:9px;margin-top:10px">
+    <div id="rateButtons" style="display:none;gap:9px;margin-top:10px">
       <button class="btn btn-full" style="background:var(--red);color:#fff;flex:1" onclick="rateQ('${key}','${q.id}',false);currentQ=Math.min(qs.length-1,currentQ+1);renderLearn()">✗ Не знав</button>
       <button class="btn btn-full btn-grn" style="flex:1" onclick="rateQ('${key}','${q.id}',true);currentQ=Math.min(qs.length-1,currentQ+1);renderLearn()">✓ Знав</button>
     </div>
@@ -1270,12 +1272,12 @@ function renderLearn(){
 }
 
 function showLearnAnswer(qId){
-  document.getElementById('showAnswerBtn').style.display='none';
-  document.getElementById('answerBox').classList.add('show');
-  setTimeout(()=>{
-    const rb=document.getElementById('rateButtons');
-    if(rb) rb.style.display='flex';
-  },200);
+  const btn=document.getElementById('showAnswerBtn');
+  const box=document.getElementById('answerBox');
+  const rb=document.getElementById('rateButtons');
+  if(btn) btn.style.display='none';
+  if(box) box.classList.add('show');
+  if(rb){ rb.style.display='flex'; rb.style.gap='9px'; }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1585,50 +1587,55 @@ async function wordClick(e, word){
   const tt = document.getElementById('wordTooltip');
   const wtUA = document.getElementById('wtUA');
   const wtDE = document.getElementById('wtDE');
-  
-  // Position
+  const addBtn = document.querySelector('.wt-btns .btn-grn');
+
+  // Position tooltip
   const rect = e.target.getBoundingClientRect();
-  tt.style.left = Math.min(rect.left, window.innerWidth-300)+'px';
-  tt.style.top = (rect.bottom+8)+'px';
-  tt.style.display='block';
+  const ttLeft = Math.min(rect.left, window.innerWidth-290);
+  const ttTop = rect.bottom + window.scrollY + 8;
+  tt.style.position = 'absolute';
+  tt.style.left = ttLeft+'px';
+  tt.style.top = ttTop+'px';
+  tt.style.display = 'block';
   wtDE.textContent = word;
-  
-  // Check vocab first
-  const existing = vocab.find(v=>v.de===word);
+
+  // Check vocab first - show translation immediately
+  const existing = vocab.find(v=>v.de.toLowerCase()===word.toLowerCase());
   if(existing){
     wtUA.textContent = existing.ua;
-    wtUA.style.color='var(--grn)';
-    document.querySelector('.wt-btns .btn-grn').textContent='✓ В словнику';
+    wtUA.style.color = 'var(--grn)';
     tooltipTranslation = existing.ua;
+    if(addBtn){ addBtn.textContent='✓ В словнику'; addBtn.style.background='var(--sf2)'; addBtn.style.color='var(--grn)'; addBtn.disabled=true; }
     return;
   }
-  
-  wtUA.textContent='⏳ Перекладаю...';
-  wtUA.style.color='var(--mt2)';
-  document.querySelector('.wt-btns .btn-grn').textContent='+ Словник';
-  
+
+  // Reset button
+  if(addBtn){ addBtn.textContent='+ Словник'; addBtn.style.background=''; addBtn.style.color=''; addBtn.disabled=false; }
+
   // Check cache
   if(wordTransCache[word]){
-    wtUA.textContent=wordTransCache[word];
-    wtUA.style.color='var(--tx)';
-    tooltipTranslation=wordTransCache[word];
+    wtUA.textContent = wordTransCache[word];
+    wtUA.style.color = 'var(--tx)';
+    tooltipTranslation = wordTransCache[word];
     return;
   }
-  
+
   // Translate via Gemini
+  wtUA.textContent = '⏳ Перекладаю...';
+  wtUA.style.color = 'var(--mt2)';
   try {
     const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:'Переклади одне слово "'+word+'" з контексту "Lagerlogistik IHK" на українську. Дай ТІЛЬКИ переклад без пояснень, максимум 4 слова.'}]}]})
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:'Переклади слово або термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад, максимум 5 слів.'}]}]})
     });
-    const data=await resp.json();
-    const ua=data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'?';
-    wordTransCache[word]=ua;
-    tooltipTranslation=ua;
-    wtUA.textContent=ua;
-    wtUA.style.color='var(--tx)';
-  } catch(e){
-    wtUA.textContent='Помилка перекладу';
+    const data = await resp.json();
+    const ua = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'?';
+    wordTransCache[word] = ua;
+    tooltipTranslation = ua;
+    wtUA.textContent = ua;
+    wtUA.style.color = 'var(--tx)';
+  } catch(err){
+    wtUA.textContent = 'Помилка';
   }
 }
 
@@ -1639,14 +1646,18 @@ function hideTooltip(){
 
 function addToVocab(){
   if(!tooltipWord||!tooltipTranslation) return;
-  if(vocab.find(v=>v.de===tooltipWord)){
-    toast('Вже в словнику!','var(--gold)');
+  if(vocab.find(v=>v.de.toLowerCase()===tooltipWord.toLowerCase())){
+    toast('Вже в словнику: '+tooltipTranslation,'var(--gold)');
     return;
   }
   vocab.push({de:tooltipWord,ua:tooltipTranslation,date:new Date().toISOString().split('T')[0],section:currentSection?.key||''});
   saveVocab();
-  toast('✅ Додано: '+tooltipWord,'var(--grn)');
-  hideTooltip();
+  // Update button
+  const addBtn=document.querySelector('.wt-btns .btn-grn');
+  if(addBtn){addBtn.textContent='✓ В словнику';addBtn.style.background='var(--sf2)';addBtn.style.color='var(--grn)';addBtn.disabled=true;}
+  const wtUA=document.getElementById('wtUA');
+  if(wtUA){wtUA.style.color='var(--grn)';}
+  toast('✅ '+tooltipWord+' → '+tooltipTranslation,'var(--grn)');
 }
 
 document.addEventListener('click',(e)=>{
