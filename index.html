@@ -1085,8 +1085,8 @@ const WISO_SECTIONS = {
 
 
 const ALL_SECTIONS = {
-  ...Object.fromEntries(Object.entries(LAGER_SECTIONS).map(([k,v])=>([k,{...v,group:'lager'}]))),
-  ...Object.fromEntries(Object.entries(WISO_SECTIONS).map(([k,v])=>([k,{...v,group:'wiso'}])))
+  ...Object.fromEntries(Object.entries(LAGER_SECTIONS).map(([k,v])=>([k,{...v,key:k,group:'lager'}]))),
+  ...Object.fromEntries(Object.entries(WISO_SECTIONS).map(([k,v])=>([k,{...v,key:k,group:'wiso'}])))
 };
 
 const LAGER_KEYS = ['I-A','I-B','I-C','I-D','I-E','I-F','I-G','I-H','I-I','I-J','II-A','II-B','II-C','II-D','II-E','II-F','II-G','II-H'];
@@ -1240,7 +1240,7 @@ function renderLearn(){
   const q = qs[currentQ];
   const key = currentSection.key;
   const qText = lang==='ua'&&q.ua ? q.ua : q.de;
-  const answer = lang==='ua'&&q.answerUA ? q.answerUA : (q.answerDE || q.explain || '');
+  const answer = (lang==='ua'&&q.answerUA ? q.answerUA : (q.answerDE || q.explain || '')).replace(/\\n/g,'\n');
 
   html += `<div class="q-card">
     <div class="q-num">Питання ${q.id} · ${key}</div>
@@ -1291,13 +1291,13 @@ function renderTest(){
   // Parse options from question text
   let opts = q.opts || [];
   if(!opts.length){
-    const lines = (q.de||'').split('\n').filter(l=>/^[a-d]\)/.test(l.trim()));
-    const linesUA = q.ua ? (q.ua||'').split('\n').filter(l=>/^[a-d]\)/.test(l.trim())) : [];
+    const lines = (q.de||'').split(/\n|\\n/).filter(l=>/^[a-d]\)/.test(l.trim()));
+    const linesUA = q.ua ? (q.ua||'').split(/\n|\\n/).filter(l=>/^[a-d]\)/.test(l.trim())) : [];
     opts = lang==='ua'&&linesUA.length ? linesUA : lines;
   }
 
   // Get question text without options
-  const questionOnly = (lang==='ua'&&q.ua?q.ua:q.de).split('\n').filter(l=>!/^[a-d]\)/.test(l.trim())&&l.trim()).join('\n');
+  const questionOnly = (lang==='ua'&&q.ua?q.ua:q.de).split(/\n|\\n/).filter(l=>!/^[a-d]\)/.test(l.trim())&&l.trim()).join('\n');
   const correctLetter = q.correct; // 'a','b','c','d'
 
   let html = `<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
@@ -1568,9 +1568,9 @@ const GEMINI_KEY = 'AIzaSyACTLqrtR1mp9Ewx2qiNjEL4pZauNRsOiU';
 const wordTransCache = {};
 
 function makeClickable(text){
-  // Split by words, make German nouns/words clickable
-  return text.replace(/\b([A-ZÜÖÄ][a-züöäßA-ZÜÖÄ]{3,})\b/g, 
-    '<span class="word-clickable" onclick="wordClick(event,'$1')">$1</span>');
+  if(!text) return '';
+  return String(text).replace(/\\n/g,'<br>').replace(/([A-ZÜÖÄ][a-züöäßA-ZÜÖÄ]{3,})/g,
+    function(w){ return '<span class="word-clickable" onclick="wordClick(event,\''+w+'\')">'+w+'</span>'; });
 }
 
 function makeWordsClickable(){
@@ -1698,23 +1698,18 @@ function rateQ(key, qId, correct){
 }
 
 function updateHomeStats(){
-  let total=0,done=0,wrong=0;
-  Object.values(ALL_SECTIONS).forEach(sec=>{
-    (sec.questions||[]).forEach(q=>{
-      total++;
-      const p=progress[sec.key+'-'+q.id]||progress;
-    });
-  });
-  // Simpler count
+  const total=Object.values(ALL_SECTIONS).reduce((s,sec)=>s+(sec.questions||[]).length,0);
   const allKeys=Object.keys(progress);
-  done=allKeys.filter(k=>progress[k].correct>0).length;
-  wrong=allKeys.filter(k=>progress[k].wrong>0&&!progress[k].correct).length;
-  total=Object.values(ALL_SECTIONS).reduce((s,sec)=>s+(sec.questions||[]).length,0);
-  
-  document.getElementById('statTotal').textContent=total;
-  document.getElementById('statDone').textContent=done;
-  document.getElementById('statWrong').textContent=wrong;
-  document.getElementById('totalBadge').textContent=done+' / '+total;
+  const done=allKeys.filter(k=>progress[k]&&progress[k].correct>0).length;
+  const wrong=allKeys.filter(k=>progress[k]&&progress[k].wrong>0&&!(progress[k].correct>0)).length;
+  const stTotal=document.getElementById('statTotal');
+  const stDone=document.getElementById('statDone');
+  const stWrong=document.getElementById('statWrong');
+  const badge=document.getElementById('totalBadge');
+  if(stTotal) stTotal.textContent=total;
+  if(stDone) stDone.textContent=done;
+  if(stWrong) stWrong.textContent=wrong;
+  if(badge) badge.textContent=done+' / '+total;
 }
 
 function renderStats(){
@@ -1751,7 +1746,7 @@ function renderStats(){
 function startRandom(){
   const allQ=[];
   Object.entries(ALL_SECTIONS).forEach(([key,sec])=>{
-    (sec.questions||[]).forEach(q=>allQ.push({...q,_key:key}));
+    (sec.questions||[]).forEach(q=>allQ.push({...q,_key:key,correct:q.correct||undefined}));
   });
   // Pick 20 random with bias towards wrong/unanswered
   const weighted=allQ.sort(()=>{
