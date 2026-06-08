@@ -1631,9 +1631,13 @@ async function callAI(prompt) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({prompt})
   });
-  if (!resp.ok) throw new Error('API ' + resp.status);
+  if (!resp.ok) {
+    const err = await resp.json().catch(()=>({}));
+    throw new Error('API ' + resp.status + ': ' + (err.error||''));
+  }
   const data = await resp.json();
-  if (!data.text) throw new Error('Empty response');
+  if (data.debug) console.error('Gemini debug:', data.debug);
+  if (!data.text) throw new Error('No text. Debug: ' + (data.debug||data.error||'unknown'));
   return data.text;
 }
 
