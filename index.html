@@ -1520,7 +1520,7 @@ Themenrelevante Begriffe: ${topicWords}`;
     chatHistory.push({role:'system', text:openingPrompt});
     chatHistory.push({role:'ai', text:_aiResp});
   } catch(e){
-    if(loadDiv) loadDiv.innerHTML='<span style="color:var(--red)">❌ Помилка. Перевір GEMINI_API_KEY у Vercel → Settings → Environment Variables → Redeploy</span>';
+    if(loadDiv) loadDiv.innerHTML='<span style="color:var(--red)">❌ '+e.message+'</span>';
   }
 }
 
