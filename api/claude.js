@@ -1,42 +1,41 @@
+// Updated: 20260608
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).end();
-  
-  // Parse body explicitly
-  let body = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch(e) {}
-  }
-  
-  const prompt = body?.prompt;
-  if (!prompt) return res.status(400).json({ error: 'No prompt', body: JSON.stringify(body) });
-  
-  const GEMINI_KEY = process.env.GEMINI_API_KEY;
-  if (!GEMINI_KEY) return res.status(500).json({ error: 'No API key' });
-  
+  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+
   try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'No prompt' });
+
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-      { 
-        method: 'POST', 
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) 
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 512,
+            thinkingConfig: { thinkingBudget: 0 }
+          }
+        })
       }
     );
+
     const data = await response.json();
-    
-    // Log full response for debugging
-    if (!data.candidates) {
-      return res.status(200).json({ text: '', debug: JSON.stringify(data) });
-    }
-    
-    const text = data.candidates[0]?.content?.parts?.[0]?.text || '';
+    if (!response.ok) return res.status(200).json({ error: 'Gemini: ' + (data.error?.message || JSON.stringify(data)) });
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     return res.status(200).json({ text });
-  } catch(e) {
-    return res.status(500).json({ error: e.message });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 }
