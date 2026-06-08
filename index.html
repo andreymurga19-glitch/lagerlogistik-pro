@@ -1570,7 +1570,7 @@ function stopMic(){
 // ══════════════════════════════════════════════════════════════
 // WORD CLICK & VOCAB
 // ══════════════════════════════════════════════════════════════
-const GEMINI_KEY = 'AIzaSyACTLqrtR1mp9Ewx2qiNjEL4pZauNRsOiU';
+// Translation via /api/claude (server-side Gemini)
 const wordTransCache = {};
 
 function makeClickable(text){
@@ -1628,12 +1628,12 @@ async function wordClick(e, word){
   wtUA.textContent = '⏳ Перекладаю...';
   wtUA.style.color = 'var(--mt2)';
   try {
-    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
+    const resp = await fetch('/api/claude',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:'Переклади слово або термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад, максимум 5 слів.'}]}]})
+      body:JSON.stringify({prompt:'Переклади слово або термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 5 слів.'})
     });
     const data = await resp.json();
-    const ua = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'?';
+    const ua = (data.text||'').trim()||'?';
     wordTransCache[word] = ua;
     tooltipTranslation = ua;
     wtUA.textContent = ua;
@@ -1679,12 +1679,12 @@ async function translateAndUpdate(word) {
     return;
   }
   try {
-    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
+    const resp = await fetch('/api/claude',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:'Переклади термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад, максимум 5 слів.'}]}]})
+      body:JSON.stringify({prompt:'Переклади термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 5 слів.'})
     });
     const data = await resp.json();
-    const ua = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'';
+    const ua = (data.text||'').trim()||'';
     if(ua) {
       wordTransCache[word] = ua;
       updateVocabEntry(word, ua);
