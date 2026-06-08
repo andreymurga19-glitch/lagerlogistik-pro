@@ -1681,16 +1681,10 @@ function makeWordsClickable(){
 }
 
 async function wordClick(e, word){
-  // Якщо це звичайний клік - і long press не спрацював - перекладаємо одне слово
-  if(_lpTimer === null && e && e.type === 'click' && _lpWord === word){
-    // Long press вже відкрив тултіп з полем - нічого не робимо
-    return;
-  }
   wordClickInternal(e, word, false);
 }
 
 async function wordClickInternal(e, word, phraseMode){
-  // Підтримка фраз — якщо передано фразу з виділення
   if(e && e._phraseOverride) word = e._phraseOverride;
   e.stopPropagation();
   tooltipWord = word;
@@ -1756,11 +1750,9 @@ let _lpTimer = null;
 let _lpWord = null;
 
 function startLongPress(e, word){
-  e.preventDefault && e.preventDefault();
   _lpWord = word;
   _lpTimer = setTimeout(function(){
     _lpTimer = null;
-    // Відкриваємо тултіп з фокусом на полі вводу
     wordClickInternal(e, word, true);
   }, 600);
 }
