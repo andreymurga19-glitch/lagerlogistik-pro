@@ -1625,17 +1625,14 @@ function stopMic(){
 // WORD CLICK & VOCAB
 // ══════════════════════════════════════════════════════════════
 
-const GEMINI_KEY = 'AIzaSyACTLqrtR1mp9Ewx2qiNjEL4pZauNRsOiU';
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY;
-
 async function callAI(prompt) {
-  const resp = await fetch(GEMINI_URL, {
+  const resp = await fetch('/api/claude', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({contents:[{parts:[{text: prompt}]}]})
+    body: JSON.stringify({prompt})
   });
   const data = await resp.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return data.text || '';
 }
 
 
