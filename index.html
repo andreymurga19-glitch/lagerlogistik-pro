@@ -1516,7 +1516,7 @@ Themenrelevante Begriffe: ${topicWords}`;
   const loadDiv = addChatMsg('ai','<div style="display:flex;align-items:center;gap:8px"><div class="spinner"></div><span style="color:var(--mt2);font-size:.82rem">Екзаменатор готується...</span></div>');
   try {
     const _aiResp = await callAI(openingPrompt);
-    if(loadDiv) loadDiv.innerHTML = _aiResp || 'Guten Tag!';
+    if(loadDiv) loadDiv.innerHTML = _aiResp;
     chatHistory.push({role:'system', text:openingPrompt});
     chatHistory.push({role:'ai', text:_aiResp});
   } catch(e){
@@ -1570,7 +1570,7 @@ REGELN (strikt):
     const aiText=await callAI(prompt);
     if(loadDiv) loadDiv.innerHTML=aiText;
     chatHistory.push({role:'ai',text:aiText});
-  } catch(e){if(loadDiv)loadDiv.innerHTML='<span style="color:var(--red)">Помилка підключення</span>';}
+  } catch(e){if(loadDiv)loadDiv.innerHTML='<span style="color:var(--red)">❌ '+e.message+'</span>';}
 }
 
 function toggleChatMic(){
@@ -1626,22 +1626,15 @@ function stopMic(){
 // ══════════════════════════════════════════════════════════════
 
 async function callAI(prompt) {
-  try {
-    const resp = await fetch('/api/claude', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({prompt})
-    });
-    if (!resp.ok) {
-      console.error('API error:', resp.status);
-      return '';
-    }
-    const data = await resp.json();
-    return data.text || '';
-  } catch(e) {
-    console.error('callAI error:', e);
-    return '';
-  }
+  const resp = await fetch('/api/claude', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({prompt})
+  });
+  if (!resp.ok) throw new Error('API ' + resp.status);
+  const data = await resp.json();
+  if (!data.text) throw new Error('Empty response');
+  return data.text;
 }
 
 
@@ -1708,7 +1701,7 @@ async function wordClick(e, word){
     wtUA.textContent = ua;
     wtUA.style.color = 'var(--tx)';
   } catch(err){
-    wtUA.textContent = 'Помилка';
+    wtUA.textContent = '❌ ' + err.message;
   }
 }
 
