@@ -1442,28 +1442,44 @@ async function checkVoiceAnswer(spoken, q){
   if(!resultEl) return;
   resultEl.style.display='block';
   resultEl.style.background='var(--sf2)';
-  resultEl.innerHTML='<div class="spinner"></div> AI перевіряє...';
+  resultEl.style.border='1px solid var(--br)';
+  resultEl.innerHTML='<div style="display:flex;align-items:center;gap:8px"><div class="spinner"></div><span style="color:var(--mt2);font-size:.82rem">AI перевіряє відповідь...</span></div>';
 
-  const correctAnswer = q.answerDE||q.explain||'';
-  const qText = q.de.split('\n')[0];
-  const prompt = `Студент відповідає на питання з іспиту "Fachkraft für Lagerlogistik".
+  const correctAnswer = (q.answerDE||q.explain||'').replace(/\\n/g,'\n');
+  const qText = q.de.split(/\n|\\n/)[0];
+
+  const prompt = `Ти перевіряєш усну відповідь студента на іспиті "Fachkraft für Lagerlogistik".
+
 Питання: "${qText}"
-Правильна відповідь (довідка): "${correctAnswer}"
-Відповідь студента: "${spoken}"
+Еталонна відповідь: "${correctAnswer}"
+Відповідь студента (розпізнана голосом): "${spoken}"
 
-Оціни відповідь коротко (2-3 речення українською):
-1. Правильно чи ні (частково правильно)
-2. Що не вистачало або що добре сказав
-3. Ключове слово яке треба запам'ятати`;
+ВАЖЛИВО: Це усний іспит, не граматичний. Оцінюй ЗМІСТ, не ідеальність формулювань.
+
+Дай відповідь у форматі:
+✅ або ⚠️ або ❌ [Загальна оцінка одним реченням]
+
+📝 Що правильно: [що студент сказав вірно]
+❗ Чого не вистачає: [що пропустив або сказав неточно, якщо є]
+💡 Запам'ятай: [головна думка або ключовий термін]
+
+Відповідай УКРАЇНСЬКОЮ, коротко (3-4 рядки).`;
 
   try {
     const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const data = await resp.json();
-    resultEl.style.background='rgba(37,99,235,.1)';
-    resultEl.style.border='1px solid var(--blue)';
-    resultEl.innerHTML=`<div style="font-size:.75rem;color:var(--mt2);margin-bottom:6px">Ти сказав: "${spoken}"</div>${data.text||'Помилка'}`;
+    const txt = data.text||'';
+    const isOk = txt.startsWith('✅');
+    const isWarn = txt.startsWith('⚠️');
+    resultEl.style.background = isOk ? 'rgba(34,197,94,.08)' : isWarn ? 'rgba(234,179,8,.08)' : 'rgba(239,68,68,.08)';
+    resultEl.style.border = '1px solid ' + (isOk ? 'var(--grn)' : isWarn ? '#eab308' : 'var(--red)');
+    resultEl.innerHTML = `
+      <div style="font-size:.72rem;color:var(--mt2);margin-bottom:8px;font-family:var(--fm)">🎤 "${spoken}"</div>
+      <div style="font-size:.84rem;line-height:1.7;white-space:pre-wrap">${txt}</div>`;
   } catch(e){
-    resultEl.innerHTML='Помилка підключення';
+    resultEl.style.background='rgba(239,68,68,.1)';
+    resultEl.style.border='1px solid var(--red)';
+    resultEl.innerHTML='<div style="color:var(--red)">❌ Помилка підключення до AI. Перевір інтернет.</div>';
   }
 }
 
@@ -1493,27 +1509,25 @@ async function renderChat(){
     <button class="btn btn-ghost btn-full btn-sm" onclick="startMode('chat')">🔄 Нова розмова</button>`;
 
   // Start conversation
-  const systemPrompt = `Du bist ein IHK-Prüfer für die Abschlussprüfung "Fachkraft für Lagerlogistik". 
-Thema: "${label}" (${key}).
-Relevante Themen aus diesem Bereich: ${topicWords}
+  const openingPrompt = `Du bist ein strenger aber fairer IHK-Prüfer für "Fachkraft für Lagerlogistik".
+Thema heute: "${label}" (Abschnitt ${key}).
+Schlüsselbegriffe: ${topicWords}
 
-REGELN:
-- Stelle Fragen wie bei der echten IHK-Prüfung
-- Wenn der Student Fehler macht, korrigiere freundlich auf Deutsch
-- Nach 2-3 Fragen gib eine kurze Zusammenfassung auf Ukrainisch
-- Wechsle zwischen Deutsch und Ukrainisch je nach Antwort des Studenten
-- Stelle max 5-7 Fragen pro Gespräch
+Begrüße den Prüfling kurz und professionell auf Deutsch (1 Satz), dann stelle sofort die erste Prüfungsfrage zu diesem Thema.
+Beispiel: "Guten Tag! Wir beginnen mit dem Thema ${label}. Erste Frage: ..."
 
-Beginne mit einer Einstiegsfrage auf Deutsch.`;
+Stelle genau 1 Frage. Warte auf die Antwort.`;
 
-  addChatMsg('ai','<div class="spinner"></div>');
+  const loadDiv = addChatMsg('ai','<div class="spinner"></div> Екзаменатор готується...');
   try {
-    const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:systemPrompt})});
+    const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:openingPrompt})});
     const data = await resp.json();
-    const msgs = document.querySelectorAll('#chatMsgs .chat-msg.ai');
-    if(msgs.length) msgs[msgs.length-1].innerHTML=data.text||'Привіт!';
+    if(loadDiv) loadDiv.innerHTML = data.text||'Guten Tag!';
+    chatHistory.push({role:'system',text:openingPrompt});
     chatHistory.push({role:'ai',text:data.text});
-  } catch(e){}
+  } catch(e){
+    if(loadDiv) loadDiv.innerHTML='Помилка підключення. Перевір GEMINI_API_KEY у Vercel.';
+  }
 }
 
 function addChatMsg(role,text){
@@ -1534,18 +1548,35 @@ async function sendChat(){
   input.value='';
   addChatMsg('user',text);
   chatHistory.push({role:'user',text});
-  
+
   const label=currentSection.data.label;
-  const history=chatHistory.slice(-8).map(h=>(h.role==='ai'?'Prüfer: ':'Student: ')+h.text).join('\n');
-  const prompt=`Du bist IHK-Prüfer, Thema: "${label}".\n${history}\nPrüfer:`;
-  
+  const history=chatHistory
+    .filter(h=>h.role!=='system')
+    .slice(-8)
+    .map(h=>(h.role==='ai'?'Prüfer: ':'Student: ')+h.text)
+    .join('\n');
+
+  const prompt=`Du bist IHK-Prüfer für "Fachkraft für Lagerlogistik", Thema: "${label}".
+
+Bisheriges Gespräch:
+${history}
+
+REGELN:
+- Wenn der Student Fehler macht: korrigiere kurz auf Deutsch (z.B. "Fast richtig, aber: ...")
+- Wenn die Antwort gut ist: bestätige kurz und stelle die nächste Frage
+- Stelle immer genau 1 neue Frage
+- Antworte auf Deutsch
+- Nach 5 Fragen: gib kurze Zusammenfassung auf Ukrainisch was der Student gut/schlecht wusste
+
+Prüfer:`;
+
   const loadDiv=addChatMsg('ai','<div class="spinner"></div>');
   try {
     const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const data=await resp.json();
     if(loadDiv) loadDiv.innerHTML=data.text||'';
     chatHistory.push({role:'ai',text:data.text});
-  } catch(e){if(loadDiv)loadDiv.innerHTML='Помилка';}
+  } catch(e){if(loadDiv)loadDiv.innerHTML='<span style="color:var(--red)">Помилка підключення</span>';}
 }
 
 function toggleChatMic(){
