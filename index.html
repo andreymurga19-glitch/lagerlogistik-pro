@@ -232,6 +232,10 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);min-height:100vh
 <!-- WORD TOOLTIP -->
 <div class="word-tooltip" id="wordTooltip" style="display:none">
   <div class="wt-de" id="wtDE"></div>
+  <div style="display:flex;gap:4px;margin:4px 0">
+    <input id="wtPhraseInput" type="text" placeholder="+ дописати слово..." style="flex:1;background:var(--sf2);border:1px solid var(--br);border-radius:6px;padding:4px 8px;color:var(--tx);font-size:.82rem" onkeydown="if(event.key==='Enter')translatePhrase()">
+    <button class="btn btn-sm btn-ghost" onclick="translatePhrase()" style="padding:4px 8px">▶</button>
+  </div>
   <div class="wt-ua" id="wtUA">⏳ Перекладаю...</div>
   <div class="wt-btns">
     <button class="btn btn-sm btn-grn" onclick="addToVocab()">+ Словник</button>
@@ -1215,7 +1219,7 @@ function startMode(mode){
   currentQ = 0;
   // Learn mode: keep original order; Test/Voice: shuffle
   const qs = currentSection.data.questions||[];
-  sessionQuestions = mode==='learn' ? [...qs] : [...qs].sort(()=>Math.random()-.5);
+  sessionQuestions = [...qs].sort((a,b)=>a.id-b.id); // always in order
   renderModeContent();
 }
 
@@ -1323,7 +1327,11 @@ function renderTest(){
   const correctLetter = q.correct; // 'a','b','c','d'
 
   let html = `<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:.78rem;color:var(--mt2)">Питання ${currentQ+1}/${qs.length}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-sm btn-ghost" onclick="if(currentQ>0){currentQ--;renderTest();}" style="padding:4px 10px">←</button>
+      <span style="font-size:.78rem;color:var(--mt2)">Питання ${currentQ+1}/${qs.length}</span>
+      <button class="btn btn-sm btn-ghost" onclick="if(currentQ<sessionQuestions.length-1){currentQ++;renderTest();}" style="padding:4px 10px">→</button>
+    </div>
     <div style="font-size:.78rem;color:var(--mt2)">✓ ${qs.slice(0,currentQ).filter(qq=>{const p=progress[key+'-'+qq.id];return p&&p.correct>0;}).length} · ✗ ${qs.slice(0,currentQ).filter(qq=>{const p=progress[key+'-'+qq.id];return p&&p.wrong>0&&!(p.correct>0);}).length}</div>
   </div>`;
 
@@ -1691,6 +1699,8 @@ async function wordClick(e, word){
   tt.style.top = ttTop+'px';
   tt.style.display = 'block';
   wtDE.textContent = word;
+  const phraseInput = document.getElementById('wtPhraseInput');
+  if(phraseInput) phraseInput.value = '';
 
   // Check vocab first - show translation immediately
   const existing = vocab.find(v=>v.de.toLowerCase()===word.toLowerCase());
@@ -1725,6 +1735,29 @@ async function wordClick(e, word){
   } catch(err){
     wtUA.textContent = '❌ ' + err.message;
   }
+}
+
+function translatePhrase(){
+  const input = document.getElementById('wtPhraseInput');
+  const extra = (input && input.value.trim()) || '';
+  if(!extra) return;
+  const fullPhrase = (tooltipWord||'') + ' ' + extra;
+  const wtUA = document.getElementById('wtUA');
+  const wtDE = document.getElementById('wtDE');
+  wtDE.textContent = fullPhrase;
+  tooltipWord = fullPhrase;
+  tooltipTranslation = null;
+  wtUA.textContent = '⏳ Перекладаю...';
+  wtUA.style.color = 'var(--mt2)';
+  callAI('Переклади словосполучення або фразу "'+fullPhrase+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 8 слів.')
+    .then(ua=>{
+      ua = ua.trim() || '?';
+      wordTransCache[fullPhrase] = ua;
+      tooltipTranslation = ua;
+      wtUA.textContent = ua;
+      wtUA.style.color = 'var(--tx)';
+    }).catch(err=>{ wtUA.textContent = '❌ '+err.message; });
+  if(input) input.value = '';
 }
 
 function hideTooltip(){
