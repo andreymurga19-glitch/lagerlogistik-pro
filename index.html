@@ -232,7 +232,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);min-height:100vh
 <!-- WORD TOOLTIP -->
 <div class="word-tooltip" id="wordTooltip" style="display:none">
   <div class="wt-de" id="wtDE"></div>
-  <div style="display:flex;gap:4px;margin:4px 0">
+  <div class="wt-phrase-row" style="display:none;gap:4px;margin:4px 0">
     <input id="wtPhraseInput" type="text" placeholder="+ дописати слово..." style="flex:1;background:var(--sf2);border:1px solid var(--br);border-radius:6px;padding:4px 8px;color:var(--tx);font-size:.82rem" onkeydown="if(event.key==='Enter')translatePhrase()">
     <button class="btn btn-sm btn-ghost" onclick="translatePhrase()" style="padding:4px 8px">▶</button>
   </div>
@@ -1671,7 +1671,7 @@ const wordTransCache = {};
 function makeClickable(text){
   if(!text) return '';
   return String(text).replace(/\\n/g,'<br>').replace(/([A-Za-züöäßÜÖÄ]{3,})/g,
-    function(w){ return '<span class="word-clickable" onclick="wordClick(event,\''+w+'\')">'+w+'</span>'; });
+    function(w){ return '<span class="word-clickable" onclick="wordClick(event,\''+w+'\')" onmousedown="startLongPress(event,\''+w+'\')" ontouchstart="startLongPress(event,\''+w+'\')" onmouseup="cancelLongPress()" ontouchend="cancelLongPress()" onmouseleave="cancelLongPress()">'+w+'</span>'; });
 }
 
 function makeWordsClickable(){
@@ -1681,6 +1681,15 @@ function makeWordsClickable(){
 }
 
 async function wordClick(e, word){
+  // Якщо це звичайний клік - і long press не спрацював - перекладаємо одне слово
+  if(_lpTimer === null && e && e.type === 'click' && _lpWord === word){
+    // Long press вже відкрив тултіп з полем - нічого не робимо
+    return;
+  }
+  wordClickInternal(e, word, false);
+}
+
+async function wordClickInternal(e, word, phraseMode){
   // Підтримка фраз — якщо передано фразу з виділення
   if(e && e._phraseOverride) word = e._phraseOverride;
   e.stopPropagation();
@@ -1700,7 +1709,12 @@ async function wordClick(e, word){
   tt.style.display = 'block';
   wtDE.textContent = word;
   const phraseInput = document.getElementById('wtPhraseInput');
-  if(phraseInput) phraseInput.value = '';
+  if(phraseInput){
+    phraseInput.value = '';
+    phraseInput.style.display = phraseMode ? 'block' : 'none';
+    document.querySelector('.wt-phrase-row').style.display = phraseMode ? 'flex' : 'none';
+    if(phraseMode) setTimeout(()=>phraseInput.focus(), 100);
+  }
 
   // Check vocab first - show translation immediately
   const existing = vocab.find(v=>v.de.toLowerCase()===word.toLowerCase());
@@ -1735,6 +1749,24 @@ async function wordClick(e, word){
   } catch(err){
     wtUA.textContent = '❌ ' + err.message;
   }
+}
+
+// ═══ LONG PRESS ═══
+let _lpTimer = null;
+let _lpWord = null;
+
+function startLongPress(e, word){
+  e.preventDefault && e.preventDefault();
+  _lpWord = word;
+  _lpTimer = setTimeout(function(){
+    _lpTimer = null;
+    // Відкриваємо тултіп з фокусом на полі вводу
+    wordClickInternal(e, word, true);
+  }, 600);
+}
+
+function cancelLongPress(){
+  if(_lpTimer){ clearTimeout(_lpTimer); _lpTimer = null; }
 }
 
 function translatePhrase(){
