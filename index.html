@@ -1373,13 +1373,20 @@ function renderTestResult(){
 // VOICE MODE
 // ══════════════════════════════════════════════════════════════
 function renderVoice(){
-  const qs = sessionQuestions.filter(q=>!q.opts||!q.opts.length||q.correct===undefined);
+  // Sort by id for ordered questions
+  const allQs = [...(currentSection.data.questions||[])].sort((a,b)=>a.id-b.id);
+  // Prefer open questions, fallback to all
+  const openQs = allQs.filter(q=>!q.correct);
+  const qs = openQs.length ? openQs : allQs;
+
   if(!qs.length){
-    document.getElementById('modeContent').innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mt2)">У цьому розділі всі питання тестові.<br>Спробуй режим 🎯 Тест</div>`;
+    document.getElementById('modeContent').innerHTML = `<div class="card" style="text-align:center;padding:20px;color:var(--mt2)">Немає питань</div>`;
     return;
   }
-  const q = qs[currentQ%qs.length];
-  const qText = lang==='ua'&&q.ua ? q.ua.split('\n')[0] : q.de.split('\n')[0];
+  if(currentQ >= qs.length) currentQ = 0;
+  const q = qs[currentQ];
+  const qText = lang==='ua'&&q.ua ? q.ua.split(/\n|\\n/)[0] : q.de.split(/\n|\\n/)[0];
+  const answer = (lang==='ua'&&q.answerUA ? q.answerUA : (q.answerDE||q.explain||'')).replace(/\\n/g,'\n');
 
   document.getElementById('modeContent').innerHTML = `
     <div class="card" style="margin-bottom:12px">
@@ -1387,21 +1394,43 @@ function renderVoice(){
       <div class="q-text" style="margin-bottom:12px">${qText}</div>
       <div id="voiceResult" style="display:none;padding:12px;border-radius:8px;margin-bottom:12px;font-size:.84rem;line-height:1.6"></div>
     </div>
-    <div style="text-align:center;margin-bottom:16px">
+
+    <div style="text-align:center;margin-bottom:14px">
       <button class="mic-btn" id="voiceMicBtn" onclick="toggleVoiceMic()">🎤</button>
       <div id="voiceStatus" style="font-size:.78rem;color:var(--mt2);margin-top:10px;font-family:var(--fm)">Натисни 🎤 і відповідай голосом</div>
     </div>
+
+    ${answer ? `
+    <div style="margin-bottom:12px">
+      <button class="btn btn-ghost btn-full btn-sm" id="hintBtn" onclick="toggleHint()">💡 Показати підказку</button>
+      <div id="hintBox" style="display:none;background:rgba(37,99,235,.1);border:1px solid var(--blue);border-radius:8px;padding:12px;margin-top:8px;font-size:.82rem;line-height:1.6;white-space:pre-wrap">${answer}</div>
+    </div>` : ''}
+
     <div style="display:flex;gap:9px">
-      <button class="btn btn-ghost" style="flex:1" onclick="currentQ=Math.max(0,currentQ-1);renderVoice()">← Назад</button>
-      <button class="btn" style="flex:1" onclick="currentQ++;renderVoice()">Далі →</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="voicePrev()">← Назад</button>
+      <button class="btn" style="flex:1" onclick="voiceNext()">Далі →</button>
     </div>`;
+
+  // Store current qs for nav
+  window._voiceQs = qs;
+}
+
+function voicePrev(){ if(currentQ>0){currentQ--;renderVoice();} }
+function voiceNext(){ currentQ++;renderVoice(); }
+function toggleHint(){
+  const box=document.getElementById('hintBox');
+  const btn=document.getElementById('hintBtn');
+  if(!box) return;
+  const show=box.style.display==='none';
+  box.style.display=show?'block':'none';
+  btn.textContent=show?'💡 Сховати підказку':'💡 Показати підказку';
 }
 
 let voiceCurrentQ = null;
 function toggleVoiceMic(){
   if(micListening){ stopMic(); return; }
-  const qs = sessionQuestions.filter(q=>!q.opts||!q.opts.length);
-  const q = qs[currentQ%qs.length];
+  const qs = window._voiceQs || sessionQuestions;
+  const q = qs[currentQ % qs.length];
   voiceCurrentQ = q;
   startMic('de-DE', (text)=>{
     checkVoiceAnswer(text, q);
