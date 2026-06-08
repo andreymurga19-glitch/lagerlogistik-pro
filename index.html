@@ -1488,45 +1488,42 @@ async function checkVoiceAnswer(spoken, q){
 // ══════════════════════════════════════════════════════════════
 async function renderChat(){
   chatHistory = [];
-  const label = lang==='ua'&&currentSection.data.labelUA ? currentSection.data.labelUA : currentSection.data.label;
+  const label = currentSection.data.label;
+  const labelUA = currentSection.data.labelUA || label;
   const key = currentSection.key;
-  
-  // Get topic keywords from section
   const qs = currentSection.data.questions||[];
-  const topicWords = qs.slice(0,5).map(q=>q.de.split('\n')[0]).join('; ');
+  const topicWords = qs.slice(0,8).map(q=>q.de.split(/\n|\\n/)[0]).join('; ');
 
   document.getElementById('modeContent').innerHTML = `
-    <div class="card" style="margin-bottom:12px">
-      <div style="font-size:.84rem;font-weight:600;margin-bottom:4px">💬 Розмова · ${label}</div>
-      <div style="font-size:.72rem;color:var(--mt2)">AI грає роль екзаменатора IHK</div>
+    <div style="background:linear-gradient(135deg,#1e3a8a22,#4c1d9522);border:1px solid var(--blue);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:.9rem;font-weight:700;color:#fff;margin-bottom:2px">💬 ${label}</div>
+      <div style="font-size:.72rem;color:var(--mt2)">${labelUA} · AI екзаменатор IHK</div>
     </div>
-    <div class="chat-msgs" id="chatMsgs"></div>
-    <div class="chat-input-row" style="margin-bottom:10px">
-      <button id="chatMicBtn" onclick="toggleChatMic()" style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;font-size:18px;cursor:pointer;flex-shrink:0">🎤</button>
-      <textarea id="chatInput" class="chat-input" placeholder="Відповідай по-німецьки або українською..." rows="2" style="height:auto" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-      <button class="btn btn-sm" onclick="sendChat()">➤</button>
+    <div class="chat-msgs" id="chatMsgs" style="min-height:250px;max-height:55vh"></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
+      <button id="chatMicBtn" onclick="toggleChatMic()" style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;transition:all .2s">🎤</button>
+      <textarea id="chatInput" class="chat-input" placeholder="Antwort auf Deutsch..." rows="2" style="flex:1;height:auto;min-height:44px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+      <button class="btn btn-sm" onclick="sendChat()" style="height:44px;padding:0 16px;flex-shrink:0">➤</button>
     </div>
     <button class="btn btn-ghost btn-full btn-sm" onclick="startMode('chat')">🔄 Нова розмова</button>`;
 
-  // Start conversation
-  const openingPrompt = `Du bist ein strenger aber fairer IHK-Prüfer für "Fachkraft für Lagerlogistik".
-Thema heute: "${label}" (Abschnitt ${key}).
-Schlüsselbegriffe: ${topicWords}
+  const openingPrompt = `Du bist IHK-Prüfer für "Fachkraft für Lagerlogistik".
+Thema: "${label}".
 
-Begrüße den Prüfling kurz und professionell auf Deutsch (1 Satz), dann stelle sofort die erste Prüfungsfrage zu diesem Thema.
-Beispiel: "Guten Tag! Wir beginnen mit dem Thema ${label}. Erste Frage: ..."
+Beginne SOFORT mit der Prüfung. Kein langer Smalltalk.
+Sage nur: "Guten Tag! Thema heute: ${label}. [Deine erste konkrete Prüfungsfrage zum Thema]?"
 
-Stelle genau 1 Frage. Warte auf die Antwort.`;
+Themenrelevante Begriffe: ${topicWords}`;
 
-  const loadDiv = addChatMsg('ai','<div class="spinner"></div> Екзаменатор готується...');
+  const loadDiv = addChatMsg('ai','<div style="display:flex;align-items:center;gap:8px"><div class="spinner"></div><span style="color:var(--mt2);font-size:.82rem">Екзаменатор готується...</span></div>');
   try {
     const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:openingPrompt})});
     const data = await resp.json();
     if(loadDiv) loadDiv.innerHTML = data.text||'Guten Tag!';
-    chatHistory.push({role:'system',text:openingPrompt});
-    chatHistory.push({role:'ai',text:data.text});
+    chatHistory.push({role:'system', text:openingPrompt});
+    chatHistory.push({role:'ai', text:data.text});
   } catch(e){
-    if(loadDiv) loadDiv.innerHTML='Помилка підключення. Перевір GEMINI_API_KEY у Vercel.';
+    if(loadDiv) loadDiv.innerHTML='<span style="color:var(--red)">❌ Помилка. Перевір GEMINI_API_KEY у Vercel → Settings → Environment Variables → Redeploy</span>';
   }
 }
 
@@ -1560,15 +1557,16 @@ async function sendChat(){
 
 Bisheriges Gespräch:
 ${history}
+Prüfer:
 
-REGELN:
-- Wenn der Student Fehler macht: korrigiere kurz auf Deutsch (z.B. "Fast richtig, aber: ...")
-- Wenn die Antwort gut ist: bestätige kurz und stelle die nächste Frage
-- Stelle immer genau 1 neue Frage
-- Antworte auf Deutsch
-- Nach 5 Fragen: gib kurze Zusammenfassung auf Ukrainisch was der Student gut/schlecht wusste
-
-Prüfer:`;
+REGELN (strikt):
+1. Bewerte die letzte Antwort des Studenten KONKRET:
+   - Richtig → "Richtig! [was genau richtig war]. Nächste Frage: ..."  
+   - Teilweise → "Fast! Du hast [X] richtig, aber [Y] vergessen. Nächste Frage: ..."
+   - Falsch → "Nicht ganz. Richtig wäre: [korrekte Antwort kurz]. Nächste Frage: ..."
+2. Stelle IMMER genau 1 neue Frage danach
+3. Antworte auf Deutsch
+4. Nach jeder 5. Frage: schreibe "📊 Zusammenfassung:" auf Ukrainisch`;
 
   const loadDiv=addChatMsg('ai','<div class="spinner"></div>');
   try {
