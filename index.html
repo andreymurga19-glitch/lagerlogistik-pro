@@ -1466,9 +1466,7 @@ async function checkVoiceAnswer(spoken, q){
 Відповідай УКРАЇНСЬКОЮ, коротко (3-4 рядки).`;
 
   try {
-    const resp = await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
-    const data = await resp.json();
-    const txt = data.text||'';
+    const txt = await callAI(prompt);
     const isOk = txt.startsWith('✅');
     const isWarn = txt.startsWith('⚠️');
     resultEl.style.background = isOk ? 'rgba(34,197,94,.08)' : isWarn ? 'rgba(234,179,8,.08)' : 'rgba(239,68,68,.08)';
@@ -1570,10 +1568,9 @@ REGELN (strikt):
 
   const loadDiv=addChatMsg('ai','<div class="spinner"></div>');
   try {
-    const resp=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
-    const data=await resp.json();
-    if(loadDiv) loadDiv.innerHTML=data.text||'';
-    chatHistory.push({role:'ai',text:data.text});
+    const aiText=await callAI(prompt);
+    if(loadDiv) loadDiv.innerHTML=aiText;
+    chatHistory.push({role:'ai',text:aiText});
   } catch(e){if(loadDiv)loadDiv.innerHTML='<span style="color:var(--red)">Помилка підключення</span>';}
 }
 
@@ -1628,7 +1625,21 @@ function stopMic(){
 // ══════════════════════════════════════════════════════════════
 // WORD CLICK & VOCAB
 // ══════════════════════════════════════════════════════════════
-// Translation via /api/claude (server-side Gemini)
+
+const GEMINI_KEY = 'AIzaSyACTLqrtR1mp9Ewx2qiNjEL4pZauNRsOiU';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY;
+
+async function callAI(prompt) {
+  const resp = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({contents:[{parts:[{text: prompt}]}]})
+  });
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+
 const wordTransCache = {};
 
 function makeClickable(text){
@@ -1686,12 +1697,7 @@ async function wordClick(e, word){
   wtUA.textContent = '⏳ Перекладаю...';
   wtUA.style.color = 'var(--mt2)';
   try {
-    const resp = await fetch('/api/claude',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt:'Переклади слово або термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 5 слів.'})
-    });
-    const data = await resp.json();
-    const ua = (data.text||'').trim()||'?';
+    const ua = (await callAI('Переклади слово або термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 5 слів.')).trim()||'?';
     wordTransCache[word] = ua;
     tooltipTranslation = ua;
     wtUA.textContent = ua;
@@ -1737,12 +1743,7 @@ async function translateAndUpdate(word) {
     return;
   }
   try {
-    const resp = await fetch('/api/claude',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt:'Переклади термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 5 слів.'})
-    });
-    const data = await resp.json();
-    const ua = (data.text||'').trim()||'';
+    const ua = (await callAI('Переклади термін "'+word+'" з галузі "Lagerlogistik IHK" на українську. ТІЛЬКИ переклад без пояснень, максимум 5 слів.')).trim()||'';
     if(ua) {
       wordTransCache[word] = ua;
       updateVocabEntry(word, ua);
