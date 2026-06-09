@@ -1789,7 +1789,17 @@ function toggleTTS(){
     btn.textContent = ttsEnabled ? '🔊' : '🔇';
     btn.style.opacity = ttsEnabled ? '1' : '0.5';
   }
-  if(!ttsEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+  if(!ttsEnabled){
+    if(window.speechSynthesis) window.speechSynthesis.cancel();
+  } else {
+    // Розблокуємо аудіо браузера через прямий тап - програємо пустий utterance
+    if(window.speechSynthesis){
+      const unlock = new SpeechSynthesisUtterance(' ');
+      unlock.volume = 0;
+      unlock.lang = 'de-DE';
+      window.speechSynthesis.speak(unlock);
+    }
+  }
   toast(ttsEnabled ? '🔊 Озвучення увімкнено' : '🔇 Озвучення вимкнено', 'var(--gold)');
 }
 
