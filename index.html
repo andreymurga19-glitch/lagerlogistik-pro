@@ -1788,40 +1788,54 @@ function toggleTTS(){
   if(btn){
     btn.textContent = ttsEnabled ? '🔊' : '🔇';
     btn.style.opacity = ttsEnabled ? '1' : '0.5';
+    btn.style.border = ttsEnabled ? '2px solid var(--gold)' : '1px solid var(--br)';
   }
   if(!ttsEnabled){
     if(window.speechSynthesis) window.speechSynthesis.cancel();
+    toast('🔇 Озвучення вимкнено', 'var(--mt2)');
   } else {
-    // Розблокуємо аудіо браузера через прямий тап - програємо пустий utterance
+    toast('🔊 Озвучення увімкнено', 'var(--gold)');
+    // Одразу промовляємо тестову фразу щоб розблокувати аудіо
     if(window.speechSynthesis){
-      const unlock = new SpeechSynthesisUtterance(' ');
-      unlock.volume = 0;
-      unlock.lang = 'de-DE';
-      window.speechSynthesis.speak(unlock);
+      window.speechSynthesis.cancel();
+      const test = new SpeechSynthesisUtterance('Bereit');
+      test.lang = 'de-DE';
+      test.rate = 1;
+      test.volume = 1;
+      window.speechSynthesis.speak(test);
     }
   }
-  toast(ttsEnabled ? '🔊 Озвучення увімкнено' : '🔇 Озвучення вимкнено', 'var(--gold)');
 }
 
 function speakChatText(text){
   if(!ttsEnabled) return;
   if(!window.speechSynthesis) return;
+  // Чистимо текст
+  const clean = text
+    .replace(/<[^>]+>/g,' ')
+    .replace(/[✓✗⚠📊💡🔊🎤🔇📋💾]/g,' ')
+    .replace(/[*#_~`]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+  if(!clean || clean.length < 2) return;
+
   window.speechSynthesis.cancel();
-  const clean = text.replace(/[✓✗⚠📊💡🔊🎤\*#]/g,'').replace(/<[^>]+>/g,'').trim();
-  if(!clean) return;
 
   function doSpeak(){
-    ttsUtterance = new SpeechSynthesisUtterance(clean);
-    ttsUtterance.lang = 'de-DE';
-    ttsUtterance.rate = 0.85;
-    ttsUtterance.pitch = 1;
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.lang = 'de-DE';
+    utt.rate = 0.85;
+    utt.pitch = 1;
+    utt.volume = 1;
     const voices = window.speechSynthesis.getVoices();
-    const deVoice = voices.find(v=>v.lang==='de-DE') || voices.find(v=>v.lang.startsWith('de'));
-    if(deVoice) ttsUtterance.voice = deVoice;
-    window.speechSynthesis.speak(ttsUtterance);
+    const deVoice = voices.find(v=>v.lang==='de-DE'&&v.localService) 
+                 || voices.find(v=>v.lang==='de-DE')
+                 || voices.find(v=>v.lang.startsWith('de'));
+    if(deVoice) utt.voice = deVoice;
+    ttsUtterance = utt;
+    window.speechSynthesis.speak(utt);
   }
 
-  // На мобільному Chrome голоси завантажуються асинхронно
   const voices = window.speechSynthesis.getVoices();
   if(voices.length > 0){
     doSpeak();
