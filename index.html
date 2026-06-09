@@ -1797,18 +1797,28 @@ function speakChatText(text){
   if(!ttsEnabled) return;
   if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  // Прибираємо емодзі та технічні символи
-  const clean = text.replace(/[✓✗⚠📊💡🔊🎤]/g,'').replace(/<[^>]+>/g,'').trim();
+  const clean = text.replace(/[✓✗⚠📊💡🔊🎤\*#]/g,'').replace(/<[^>]+>/g,'').trim();
   if(!clean) return;
-  ttsUtterance = new SpeechSynthesisUtterance(clean);
-  ttsUtterance.lang = 'de-DE';
-  ttsUtterance.rate = 0.9;
-  ttsUtterance.pitch = 1;
-  // Вибираємо German голос якщо є
+
+  function doSpeak(){
+    ttsUtterance = new SpeechSynthesisUtterance(clean);
+    ttsUtterance.lang = 'de-DE';
+    ttsUtterance.rate = 0.85;
+    ttsUtterance.pitch = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const deVoice = voices.find(v=>v.lang==='de-DE') || voices.find(v=>v.lang.startsWith('de'));
+    if(deVoice) ttsUtterance.voice = deVoice;
+    window.speechSynthesis.speak(ttsUtterance);
+  }
+
+  // На мобільному Chrome голоси завантажуються асинхронно
   const voices = window.speechSynthesis.getVoices();
-  const deVoice = voices.find(v=>v.lang.startsWith('de'));
-  if(deVoice) ttsUtterance.voice = deVoice;
-  window.speechSynthesis.speak(ttsUtterance);
+  if(voices.length > 0){
+    doSpeak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => { doSpeak(); };
+  }
+ window.speechSynthesis.speak(ttsUtterance);
 }
 
 // ══════════════════════════════════════════════════════════════
