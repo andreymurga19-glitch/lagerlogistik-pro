@@ -1767,8 +1767,12 @@ function toggleChatMic(){
   if(micListening){stopMic();return;}
   startMic('de-DE',(text)=>{
     const input=document.getElementById('chatInput');
-    if(input) input.value=text;
-    sendChat();
+    if(input){
+      // Додаємо до вже існуючого тексту (якщо є)
+      input.value = (input.value ? input.value+' ' : '') + text;
+      input.focus();
+    }
+    // НЕ відправляємо автоматично - користувач сам натисне ➤
   });
 }
 
