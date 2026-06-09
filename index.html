@@ -1523,6 +1523,7 @@ async function renderChat(){
     </div>
     <div class="chat-msgs" id="chatMsgs" style="min-height:250px;max-height:55vh"></div>
     <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
+      <button id="ttsBtnChat" onclick="toggleTTS()" style="width:40px;height:40px;border-radius:50%;background:var(--sf2);border:1px solid var(--br);color:#fff;font-size:18px;cursor:pointer;flex-shrink:0;opacity:0.5" title="Озвучення">🔇</button>
       <button id="chatMicBtn" onclick="toggleChatMic()" style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;transition:all .2s">🎤</button>
       <textarea id="chatInput" class="chat-input" placeholder="Antwort auf Deutsch..." rows="2" style="flex:1;height:auto;min-height:44px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
       <button class="btn btn-sm" onclick="sendChat()" style="height:44px;padding:0 16px;flex-shrink:0">➤</button>
@@ -1557,6 +1558,7 @@ Beginne SOFORT: "Prüfung beginnt. Thema: ${label}. Frage 1: [erste Frage]?"`;
     if(loadDiv) loadDiv.innerHTML = _aiResp;
     chatHistory.push({role:'system', text:openingPrompt});
     chatHistory.push({role:'ai', text:_aiResp});
+    speakChatText(_aiResp);
   } catch(e){
     if(loadDiv) loadDiv.innerHTML='<span style="color:var(--red)">❌ '+e.message+'</span>';
   }
@@ -1704,6 +1706,7 @@ Sage: "Wiederholung. Ich prüfe deine Schwachstellen. Frage 1: [starte mit schwi
   callAI(repeatPrompt).then(txt=>{
     if(loadDiv) loadDiv.innerHTML = txt;
     chatHistory.push({role:'ai', text:txt});
+    speakChatText(txt);
   }).catch(e=>{ if(loadDiv) loadDiv.innerHTML='<span style="color:var(--red)">❌ '+e.message+'</span>'; });
 }
 
@@ -1756,6 +1759,7 @@ STRENGE REGELN:
     const aiText=await callAI(prompt);
     if(loadDiv) loadDiv.innerHTML=aiText;
     chatHistory.push({role:'ai',text:aiText});
+    speakChatText(aiText);
   } catch(e){if(loadDiv)loadDiv.innerHTML='<span style="color:var(--red)">❌ '+e.message+'</span>';}
 }
 
@@ -1769,6 +1773,41 @@ function toggleChatMic(){
 }
 
 // ══════════════════════════════════════════════════════════════
+// TTS - TEXT TO SPEECH
+// ══════════════════════════════════════════════════════════════
+let ttsEnabled = false;
+let ttsUtterance = null;
+
+function toggleTTS(){
+  ttsEnabled = !ttsEnabled;
+  const btn = document.getElementById('ttsBtnChat');
+  if(btn){
+    btn.textContent = ttsEnabled ? '🔊' : '🔇';
+    btn.style.opacity = ttsEnabled ? '1' : '0.5';
+  }
+  if(!ttsEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+  toast(ttsEnabled ? '🔊 Озвучення увімкнено' : '🔇 Озвучення вимкнено', 'var(--gold)');
+}
+
+function speakChatText(text){
+  if(!ttsEnabled) return;
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  // Прибираємо емодзі та технічні символи
+  const clean = text.replace(/[✓✗⚠📊💡🔊🎤]/g,'').replace(/<[^>]+>/g,'').trim();
+  if(!clean) return;
+  ttsUtterance = new SpeechSynthesisUtterance(clean);
+  ttsUtterance.lang = 'de-DE';
+  ttsUtterance.rate = 0.9;
+  ttsUtterance.pitch = 1;
+  // Вибираємо German голос якщо є
+  const voices = window.speechSynthesis.getVoices();
+  const deVoice = voices.find(v=>v.lang.startsWith('de'));
+  if(deVoice) ttsUtterance.voice = deVoice;
+  window.speechSynthesis.speak(ttsUtterance);
+}
+
+// ══════════════════════════════════════════════════════════════
 // MICROPHONE
 // ══════════════════════════════════════════════════════════════
 function startMic(lang_code, onResult){
@@ -1778,7 +1817,8 @@ function startMic(lang_code, onResult){
   micRec=new SR();
   micRec.lang=lang_code;
   micRec.interimResults=false;
-  micRec.maxAlternatives=3;
+  micRec.maxAlternatives=5;
+  micRec.continuous=false;
   micListening=true;
   
   const btn=document.getElementById('voiceMicBtn')||document.getElementById('chatMicBtn');
@@ -1794,7 +1834,11 @@ function startMic(lang_code, onResult){
   
   micRec.onresult=(e)=>{
     reset();
-    const text=e.results[0][0].transcript;
+    // Беремо всі альтернативи і вибираємо найкращу
+    const alts = [];
+    for(let i=0;i<e.results[0].length;i++) alts.push(e.results[0][i].transcript);
+    // Якщо є кілька альтернатив - беремо ту що найдовша (часто точніша для складних слів)
+    const text = alts.reduce((a,b)=>b.length>a.length?b:a, alts[0]);
     onResult(text);
   };
   micRec.onerror=(e)=>{reset();};
