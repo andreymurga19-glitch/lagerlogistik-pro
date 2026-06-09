@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   const MODELS = [
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
     'gemini-1.5-flash'
   ];
 
